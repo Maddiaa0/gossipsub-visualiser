@@ -4,6 +4,8 @@ import { Graph } from "react-d3-graph";
 const GossipsubVisualizer = () => {
   const [data, setData] = useState({ nodes: [], links: [] });
   const [step, setStep] = useState(0);
+  // Add a new state for storing the peer ID to alias mapping
+  const [peerAliases, setPeerAliases] = useState(new Map());
 
   useEffect(() => {
     const fetchData = async () => {
@@ -11,51 +13,67 @@ const GossipsubVisualizer = () => {
         // Read the log file
         const res = await fetch("./log.txt");
         const text = await res.text();
-
-        // Parse the logs into nodes and links
-        console.log("fetching");
         const lines = text.split("\n");
-        console.log(lines.length);
         const nodes = new Set();
         const links = [];
         let currentStep = 0;
 
+        // First pass: collect all unique peer IDs
         lines.forEach((line) => {
           const match = line.match(/\b(16Uiu2\w+)\b/g);
           if (match) {
             match.forEach((id) => nodes.add(id));
           }
-          if (line.includes("rpc.from")) {
+        });
+
+        // Create aliases for each peer ID
+        const aliases = new Map();
+        Array.from(nodes).forEach((id, index) => {
+          aliases.set(id, `Node ${index + 1}`);
+        });
+        setPeerAliases(aliases);
+
+        // Second pass: create links
+        lines.forEach((line) => {
+          const match = line.match(/\b(16Uiu2\w+)\b/g);
+          if (line.includes("rpc.from") && match) {
             const [to] = match;
             const sourceMatch = line.match(/"sourcePeerId":"(16Uiu2\w+)"/);
             const source = sourceMatch ? sourceMatch[1] : "unknown";
-
             const link = { source, target: to, step: currentStep };
-            console.log(currentStep, link);
             links.push(link);
             currentStep++;
           }
         });
 
         setData({
-          nodes: Array.from(nodes).map((id) => ({ id })),
+          nodes: Array.from(nodes).map((id) => ({
+            id,
+            // Add the alias as a separate property
+            alias: aliases.get(id),
+          })),
           links,
         });
       } catch (error) {
         console.error("Error reading file:", error);
       }
     };
-
     fetchData();
   }, []);
 
-  // Configure graph
+  // Configure graph with custom node label
   const graphConfig = {
     nodeHighlightBehavior: true,
     node: {
       color: "lightgreen",
       size: 120,
       highlightStrokeColor: "blue",
+      // Override the default label with the alias
+      labelProperty: "alias",
+      // Customize label styling
+      labelPosition: "center",
+      fontSize: 12,
+      fontWeight: "bold",
     },
     link: {
       highlightColor: "lightblue",
@@ -91,6 +109,18 @@ const GossipsubVisualizer = () => {
       />
       <div className="mt-2 text-sm text-gray-500">
         Showing message propagation at step {step} of {data.links.length}
+      </div>
+
+      {/* Optional: Add a legend showing the mapping */}
+      <div className="mt-4 text-sm">
+        <h3 className="font-bold mb-2">Node ID Mapping</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+          {Array.from(peerAliases).map(([peerId, alias]) => (
+            <div key={peerId} className="text-gray-600">
+              {alias}: {peerId.slice(0, 8)}...
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
