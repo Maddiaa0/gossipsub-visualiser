@@ -11,7 +11,7 @@ const GossipsubVisualizer = () => {
     const fetchData = async () => {
       try {
         // Read the log file
-        const res = await fetch("./log.txt");
+        const res = await fetch("./log2.txt");
         const text = await res.text();
         const lines = text.split("\n");
         const nodes = new Set();
